@@ -1,11 +1,21 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 
+enum MessageRole { user, assistant }
+
+class ChatMessage {
+  ChatMessage({required this.text, required this.role});
+
+  final String text;
+  final MessageRole role;
+}
+
 class Conversation {
-  Conversation(this.title, {List<String>? messages})
-      : messages = messages ?? <String>[];
+  Conversation(this.title, {List<ChatMessage>? messages})
+      : messages = messages ?? <ChatMessage>[];
 
   String title;
-  final List<String> messages;
+  final List<ChatMessage> messages;
 }
 
 class ChatScreen extends StatefulWidget {
@@ -21,6 +31,15 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<Conversation> _conversations = [];
 
   int _selectedConversationIndex = -1;
+  bool _isDraftActive = true;
+  final List<String> _welcomeMessages = const [
+    'No que você está pensando hoje?',
+    'No que você está trabalhando?',
+    'Como posso ajudar?',
+    'Tudo pronto? Então vamos lá!',
+    'O que tem na agenda de hoje?',
+  ];
+  String _currentWelcomeMessage = 'Como posso ajudar';
 
   Conversation? get _selectedConversation =>
       _selectedConversationIndex >= 0 &&
@@ -35,17 +54,20 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _addConversation() {
+  void _startDraft() {
     setState(() {
-      final newTitle = 'Novo chat ${_conversations.length + 1}';
-      _conversations.add(Conversation(newTitle));
-      _selectedConversationIndex = _conversations.length - 1;
+      _selectedConversationIndex = -1;
+      _isDraftActive = true;
+      _currentWelcomeMessage =
+          _welcomeMessages[Random().nextInt(_welcomeMessages.length)];
+      _messageController.clear();
     });
   }
 
   void _selectConversation(int index) {
     setState(() {
       _selectedConversationIndex = index;
+      _isDraftActive = false;
     });
   }
 
@@ -98,6 +120,7 @@ class _ChatScreenState extends State<ChatScreen> {
       } else if (_selectedConversationIndex >= _conversations.length) {
         _selectedConversationIndex = _conversations.length - 1;
       }
+      _isDraftActive = false;
     });
   }
 
@@ -105,19 +128,38 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _conversations.clear();
       _selectedConversationIndex = -1;
+      _isDraftActive = false;
     });
   }
 
   void _sendMessage() {
     final conversation = _selectedConversation;
     final text = _messageController.text.trim();
-    if (conversation == null || text.isEmpty) return;
+    if (text.isEmpty) return;
 
-    setState(() {
-      conversation.messages.add(text);
-    });
+    if (conversation == null) {
+      final title = _deriveTitle(text);
+      final newConversation = Conversation(
+        title,
+        messages: [
+          ChatMessage(text: text, role: MessageRole.user),
+        ],
+      );
+      setState(() {
+        _conversations.add(newConversation);
+        _selectedConversationIndex = _conversations.length - 1;
+        _isDraftActive = false;
+        _messageController.clear();
+      });
+    } else {
+      setState(() {
+        conversation.messages.add(
+          ChatMessage(text: text, role: MessageRole.user),
+        );
+      });
+      _messageController.clear();
+    }
 
-    _messageController.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -127,6 +169,15 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     });
+  }
+
+  String _deriveTitle(String message) {
+    final trimmed = message.trim();
+    if (trimmed.isEmpty) return 'Novo chat';
+    if (trimmed.length > 50) {
+      return '${trimmed.substring(0, 50)}...';
+    }
+    return trimmed;
   }
 
   Widget _buildDrawer() {
@@ -139,7 +190,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _addConversation,
+                  onPressed: _startDraft,
                   icon: const Icon(Icons.add),
                   label: const Text('Novo chat'),
                 ),
@@ -200,14 +251,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessagesArea() {
     final conversation = _selectedConversation;
-    final messages = conversation?.messages ?? <String>[];
+    final messages = conversation?.messages ?? <ChatMessage>[];
 
     if (messages.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
-          'Como posso ajudar',
+          _currentWelcomeMessage,
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 18),
+          style: const TextStyle(fontSize: 18),
         ),
       );
     }
@@ -218,20 +269,42 @@ class _ChatScreenState extends State<ChatScreen> {
       itemCount: messages.length,
       itemBuilder: (context, index) {
         final message = messages[index];
+        final isUser = message.role == MessageRole.user;
+        final alignment = isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start;
+        final bubbleColor = isUser
+            ? Colors.blue.shade100.withOpacity(0.8)
+            : Colors.grey.shade200;
+        final maxWidth = MediaQuery.of(context).size.width * 0.75;
+
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(12),
+          child: Row(
+            // user messages align right
+            mainAxisAlignment: alignment,
+            children: [
+              Align(
+                alignment:
+                    isUser ? Alignment.centerRight : Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: bubbleColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        message.text,
+                        style: const TextStyle(color: Colors.black87),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(message),
-              ),
-            ),
+            ],
           ),
         );
       },
@@ -239,7 +312,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputArea() {
-    final hasConversation = _selectedConversation != null;
+    final hasConversationOrDraft = _selectedConversation != null || _isDraftActive;
 
     return SafeArea(
       child: Padding(
@@ -247,13 +320,13 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Row(
           children: [
             IconButton(
-              onPressed: hasConversation ? () {} : null,
+              onPressed: hasConversationOrDraft ? () {} : null,
               icon: const Icon(Icons.add),
             ),
             Expanded(
               child: TextField(
                 controller: _messageController,
-                enabled: hasConversation,
+                enabled: hasConversationOrDraft,
                 decoration: const InputDecoration(
                   hintText: 'Message',
                   border: OutlineInputBorder(),
@@ -264,7 +337,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 8),
             IconButton(
-              onPressed: hasConversation ? _sendMessage : null,
+              onPressed: hasConversationOrDraft ? _sendMessage : null,
               icon: const Icon(Icons.send),
             ),
           ],

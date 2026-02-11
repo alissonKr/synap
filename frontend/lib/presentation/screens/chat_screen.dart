@@ -1,13 +1,22 @@
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 enum MessageRole { user, assistant }
 
 class ChatMessage {
-  ChatMessage({required this.text, required this.role});
+  ChatMessage({
+    required this.text,
+    required this.role,
+    this.hasImage = false,
+    this.imagePath,
+  });
 
   final String text;
   final MessageRole role;
+  final bool hasImage;
+  final String? imagePath;
 }
 
 class Conversation {
@@ -29,9 +38,11 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Conversation> _conversations = [];
+  final ImagePicker _imagePicker = ImagePicker();
 
   int _selectedConversationIndex = -1;
   bool _isDraftActive = true;
+  XFile? _pendingImage;
   final List<String> _welcomeMessages = const [
     'No que você está pensando hoje?',
     'No que você está trabalhando?',
@@ -61,6 +72,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _currentWelcomeMessage =
           _welcomeMessages[Random().nextInt(_welcomeMessages.length)];
       _messageController.clear();
+      _pendingImage = null;
     });
   }
 
@@ -129,20 +141,29 @@ class _ChatScreenState extends State<ChatScreen> {
       _conversations.clear();
       _selectedConversationIndex = -1;
       _isDraftActive = false;
+      _pendingImage = null;
     });
   }
 
   void _sendMessage() {
     final conversation = _selectedConversation;
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    final pendingImagePath = _pendingImage?.path;
+    final hasImage = pendingImagePath != null;
+
+    if (text.isEmpty && !hasImage) return;
 
     if (conversation == null) {
-      final title = _deriveTitle(text);
+      final title = _deriveTitle(text.isNotEmpty ? text : 'Imagem');
       final newConversation = Conversation(
         title,
         messages: [
-          ChatMessage(text: text, role: MessageRole.user),
+          ChatMessage(
+            text: text,
+            role: MessageRole.user,
+            hasImage: hasImage,
+            imagePath: pendingImagePath,
+          ),
         ],
       );
       setState(() {
@@ -150,12 +171,19 @@ class _ChatScreenState extends State<ChatScreen> {
         _selectedConversationIndex = _conversations.length - 1;
         _isDraftActive = false;
         _messageController.clear();
+        _pendingImage = null;
       });
     } else {
       setState(() {
         conversation.messages.add(
-          ChatMessage(text: text, role: MessageRole.user),
+          ChatMessage(
+            text: text,
+            role: MessageRole.user,
+            hasImage: hasImage,
+            imagePath: pendingImagePath,
+          ),
         );
+        _pendingImage = null;
       });
       _messageController.clear();
     }
@@ -169,6 +197,48 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     });
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final image = await _imagePicker.pickImage(source: source);
+    if (image != null) {
+      setState(() {
+        _pendingImage = image;
+        if (_selectedConversation == null) {
+          _isDraftActive = true;
+        }
+      });
+    }
+  }
+
+  void _showImageSourceSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Câmera'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galeria'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   String _deriveTitle(String message) {
@@ -270,6 +340,8 @@ class _ChatScreenState extends State<ChatScreen> {
       itemBuilder: (context, index) {
         final message = messages[index];
         final isUser = message.role == MessageRole.user;
+        final hasText = message.text.isNotEmpty;
+        final hasImage = message.hasImage && message.imagePath != null;
         final alignment = isUser
             ? MainAxisAlignment.end
             : MainAxisAlignment.start;
@@ -277,6 +349,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ? Colors.blue.shade100.withOpacity(0.8)
             : Colors.grey.shade200;
         final maxWidth = MediaQuery.of(context).size.width * 0.75;
+        final imageMaxWidth = MediaQuery.of(context).size.width * 0.7;
+        final constrainedImageWidth = min(maxWidth, imageMaxWidth);
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -289,18 +363,39 @@ class _ChatScreenState extends State<ChatScreen> {
                     isUser ? Alignment.centerRight : Alignment.centerLeft,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: bubbleColor,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        message.text,
-                        style: const TextStyle(color: Colors.black87),
-                      ),
-                    ),
+                  child: Column(
+                    crossAxisAlignment: isUser
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    children: [
+                      if (hasImage)
+                        Padding(
+                          padding:
+                              EdgeInsets.only(bottom: hasText ? 8 : 0),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(
+                              File(message.imagePath!),
+                              width: constrainedImageWidth,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      if (hasText)
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: bubbleColor,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Text(
+                              message.text,
+                              style: const TextStyle(color: Colors.black87),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -317,28 +412,83 @@ class _ChatScreenState extends State<ChatScreen> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IconButton(
-              onPressed: hasConversationOrDraft ? () {} : null,
-              icon: const Icon(Icons.add),
-            ),
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                enabled: hasConversationOrDraft,
-                decoration: const InputDecoration(
-                  hintText: 'Message',
-                  border: OutlineInputBorder(),
-                  isDense: true,
+            if (_pendingImage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            File(_pendingImage!.path),
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: -10,
+                          right: -10,
+                          child: IconButton(
+                            visualDensity: VisualDensity.compact,
+                            iconSize: 20,
+                            onPressed: () {
+                              setState(() {
+                                _pendingImage = null;
+                              });
+                            },
+                            icon: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.all(4),
+                              child: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                onSubmitted: (_) => _sendMessage(),
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: hasConversationOrDraft ? _sendMessage : null,
-              icon: const Icon(Icons.send),
+            Row(
+              children: [
+                IconButton(
+                  onPressed:
+                      hasConversationOrDraft ? _showImageSourceSheet : null,
+                  icon: const Icon(Icons.add),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    enabled: hasConversationOrDraft,
+                    decoration: const InputDecoration(
+                      hintText: 'Message',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: hasConversationOrDraft ? _sendMessage : null,
+                  icon: const Icon(Icons.send),
+                ),
+              ],
             ),
           ],
         ),

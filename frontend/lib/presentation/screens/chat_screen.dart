@@ -35,10 +35,18 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Conversation> _conversations = [];
   final ImagePicker _imagePicker = ImagePicker();
+
+  static const Color _backgroundColor = Colors.black;
+  static const Color _surfaceColor = Color(0xFF121212);
+  static const Color _userBubbleColor = Color(0xFF1E1E1E);
+  static const Color _assistantBubbleColor = Color(0xFF2A2A2A);
+  static const Color _textPrimary = Colors.white;
+  static const Color _textSecondary = Colors.white70;
 
   int _selectedConversationIndex = -1;
   bool _isDraftActive = true;
@@ -76,6 +84,17 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  void _toggleDrawer() {
+    final scaffoldState = _scaffoldKey.currentState;
+    if (scaffoldState == null) return;
+
+    if (scaffoldState.isDrawerOpen) {
+      Navigator.of(context).pop();
+    } else {
+      scaffoldState.openDrawer();
+    }
+  }
+
   void _selectConversation(int index) {
     setState(() {
       _selectedConversationIndex = index;
@@ -92,16 +111,36 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Rename conversation'),
+          backgroundColor: _surfaceColor,
+          title: const Text(
+            'Rename conversation',
+            style: TextStyle(color: _textPrimary),
+          ),
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'Conversation title'),
+            style: const TextStyle(color: _textPrimary),
+            cursorColor: _textPrimary,
+            decoration: InputDecoration(
+              hintText: 'Conversation title',
+              hintStyle: const TextStyle(color: _textSecondary),
+              enabledBorder: OutlineInputBorder(
+                borderSide: const BorderSide(color: Colors.white24),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: const BorderSide(color: Colors.white54),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: _textSecondary),
+              ),
             ),
             TextButton(
               onPressed: () {
@@ -110,7 +149,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   Navigator.of(context).pop(text);
                 }
               },
-              child: const Text('Save'),
+              child: const Text(
+                'Save',
+                style: TextStyle(color: _textPrimary),
+              ),
             ),
           ],
         );
@@ -214,21 +256,28 @@ class _ChatScreenState extends State<ChatScreen> {
   void _showImageSourceSheet() {
     showModalBottomSheet<void>(
       context: context,
+      backgroundColor: _surfaceColor,
       builder: (context) {
         return SafeArea(
           child: Wrap(
             children: [
               ListTile(
-                leading: const Icon(Icons.photo_camera),
-                title: const Text('Câmera'),
+                leading: const Icon(Icons.photo_camera, color: _textPrimary),
+                title: const Text(
+                  'Camera',
+                  style: TextStyle(color: _textPrimary),
+                ),
                 onTap: () {
                   Navigator.of(context).pop();
                   _pickImage(ImageSource.camera);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Galeria'),
+                leading: const Icon(Icons.photo_library, color: _textPrimary),
+                title: const Text(
+                  'Galeria',
+                  style: TextStyle(color: _textPrimary),
+                ),
                 onTap: () {
                   Navigator.of(context).pop();
                   _pickImage(ImageSource.gallery);
@@ -241,6 +290,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+
   String _deriveTitle(String message) {
     final trimmed = message.trim();
     if (trimmed.isEmpty) return 'Novo chat';
@@ -252,6 +302,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildDrawer() {
     return Drawer(
+      backgroundColor: _surfaceColor,
       child: SafeArea(
         child: Column(
           children: [
@@ -261,6 +312,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _startDraft,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _userBubbleColor,
+                    foregroundColor: _textPrimary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                   icon: const Icon(Icons.add),
                   label: const Text('Novo chat'),
                 ),
@@ -271,7 +329,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ? const Center(
                       child: Text(
                         'Nenhuma conversa ainda',
-                        style: TextStyle(color: Colors.black54),
+                        style: TextStyle(color: _textSecondary),
                         textAlign: TextAlign.center,
                       ),
                     )
@@ -282,18 +340,24 @@ class _ChatScreenState extends State<ChatScreen> {
                         final isSelected = index == _selectedConversationIndex;
                         return ListTile(
                           selected: isSelected,
-                          title: Text(conversation.title),
+                          selectedTileColor: Colors.white10,
+                          title: Text(
+                            conversation.title,
+                            style: const TextStyle(color: _textPrimary),
+                          ),
                           onTap: () => _selectConversation(index),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.edit),
+                                color: _textSecondary,
                                 tooltip: 'Rename',
                                 onPressed: () => _renameConversation(index),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete),
+                                color: _textSecondary,
                                 tooltip: 'Delete',
                                 onPressed: () => _deleteConversation(index),
                               ),
@@ -309,6 +373,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 width: double.infinity,
                 child: OutlinedButton(
                   onPressed: _conversations.isEmpty ? null : _clearConversations,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _textPrimary,
+                    side: const BorderSide(color: Colors.white24),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                   child: const Text('Clear conversations'),
                 ),
               ),
@@ -319,6 +390,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+
   Widget _buildMessagesArea() {
     final conversation = _selectedConversation;
     final messages = conversation?.messages ?? <ChatMessage>[];
@@ -328,7 +400,10 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Text(
           _currentWelcomeMessage,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 18),
+          style: const TextStyle(
+            fontSize: 18,
+            color: _textSecondary,
+          ),
         ),
       );
     }
@@ -345,9 +420,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final alignment = isUser
             ? MainAxisAlignment.end
             : MainAxisAlignment.start;
-        final bubbleColor = isUser
-            ? Colors.blue.shade100.withOpacity(0.8)
-            : Colors.grey.shade200;
+        final bubbleColor = isUser ? _userBubbleColor : _assistantBubbleColor;
         final maxWidth = MediaQuery.of(context).size.width * 0.75;
         final imageMaxWidth = MediaQuery.of(context).size.width * 0.7;
         final constrainedImageWidth = min(maxWidth, imageMaxWidth);
@@ -391,7 +464,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             padding: const EdgeInsets.all(12),
                             child: Text(
                               message.text,
-                              style: const TextStyle(color: Colors.black87),
+                              style: const TextStyle(color: _textPrimary),
                             ),
                           ),
                         ),
@@ -410,7 +483,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final hasConversationOrDraft = _selectedConversation != null || _isDraftActive;
 
     return SafeArea(
-      child: Padding(
+      child: Container(
+        color: _backgroundColor,
         padding: const EdgeInsets.all(12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -447,13 +521,13 @@ class _ChatScreenState extends State<ChatScreen> {
                             },
                             icon: Container(
                               decoration: BoxDecoration(
-                                color: Colors.black54,
+                                color: Colors.white24,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               padding: const EdgeInsets.all(4),
                               child: const Icon(
                                 Icons.close,
-                                color: Colors.white,
+                                color: _textPrimary,
                                 size: 14,
                               ),
                             ),
@@ -470,14 +544,37 @@ class _ChatScreenState extends State<ChatScreen> {
                   onPressed:
                       hasConversationOrDraft ? _showImageSourceSheet : null,
                   icon: const Icon(Icons.add),
+                  color: _textSecondary,
                 ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
                     enabled: hasConversationOrDraft,
-                    decoration: const InputDecoration(
+                    style: const TextStyle(color: _textPrimary),
+                    cursorColor: _textPrimary,
+                    decoration: InputDecoration(
                       hintText: 'Message',
-                      border: OutlineInputBorder(),
+                      hintStyle: const TextStyle(color: _textSecondary),
+                      filled: true,
+                      fillColor: _surfaceColor,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: Colors.white24),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: Colors.white24),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: Colors.white54),
+                      ),
+                      disabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: Colors.white10),
+                      ),
                       isDense: true,
                     ),
                     onSubmitted: (_) => _sendMessage(),
@@ -487,6 +584,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 IconButton(
                   onPressed: hasConversationOrDraft ? _sendMessage : null,
                   icon: const Icon(Icons.send),
+                  color: _textPrimary,
                 ),
               ],
             ),
@@ -496,14 +594,35 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('Synap'),
+        backgroundColor: _backgroundColor,
+        elevation: 0.5,
+        leadingWidth: 60,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: InkWell(
+            onTap: _toggleDrawer,
+            customBorder: const CircleBorder(),
+            child: const CircleAvatar(
+              radius: 16,
+              backgroundImage: AssetImage('assets/logos/synap.redondo.png'),
+              backgroundColor: Colors.transparent,
+            ),
+          ),
+        ),
+        title: const Text(
+          'Synap',
+          style: TextStyle(color: _textPrimary),
+        ),
+        iconTheme: const IconThemeData(color: _textPrimary),
       ),
       drawer: _buildDrawer(),
-      backgroundColor: const Color(0xFFE0F7F4),
+      backgroundColor: _backgroundColor,
       body: Column(
         children: [
           Expanded(child: _buildMessagesArea()),

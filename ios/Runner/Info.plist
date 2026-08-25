@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>O Synap usa a câmera para fotografar aparelhos de academia.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>O Synap acessa suas fotos para identificar aparelhos de academia.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
